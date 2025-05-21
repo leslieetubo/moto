@@ -67,7 +67,7 @@ class CloudDirectoryResponse(BaseResponse):
         schema = self.clouddirectory_backend.create_schema(
             name=name,
         )
-        return json.dumps(dict(SchemaArn=schema))
+        return json.dumps(dict(SchemaArn=schema["SchemaArn"]))
 
     def list_directories(self) -> str:
         next_token = self._get_param("NextToken")

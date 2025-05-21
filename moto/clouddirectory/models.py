@@ -100,27 +100,11 @@ class CloudDirectoryBackend(BaseBackend):
         self.directories[directory.directory_arn] = directory
         return directory
 
-    def create_schema(self, name: str) -> str:
-        self.schema_arn = f"arn:aws:clouddirectory:{self.region_name}:{self.account_id}:schema/development/{name}"
-        self.schemas_states["development"].append(self.schema_arn)
-        return self.schema_arn
-
-    def delete_schema(self, schema_arn: str) -> None:
-        if schema_arn in self.schemas_states["development"]:
-            self.schemas_states["development"].remove(schema_arn)
-        elif schema_arn in self.schemas_states["published"]:
-            self.schemas_states["published"].remove(schema_arn)
-        else:
-            raise ResourceNotFoundException(schema_arn)
-        return
-
-    @paginate(pagination_model=PAGINATION_MODEL)
-    def list_development_schema_arns(self) -> List[str]:
-        return self.schemas_states["development"]
-
-    @paginate(pagination_model=PAGINATION_MODEL)
-    def list_published_schema_arns(self) -> List[str]:
-        return self.schemas_states["published"]
+    def create_schema(self, name: str) -> dict[str, str]:
+        self.schema_arn = (
+            f"arn:aws:clouddirectory:{self.region_name}:{self.account_id}:schema/{name}"
+        )
+        return {"SchemaArn": self.schema_arn}
 
     @paginate(pagination_model=PAGINATION_MODEL)
     def list_directories(self, state: str) -> List[Directory]:
