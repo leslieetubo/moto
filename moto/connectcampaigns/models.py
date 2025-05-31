@@ -6,9 +6,9 @@ from typing import Any, Dict, Optional, Tuple
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
+from moto.utilities.paginator import paginate
 
 from .exceptions import ResourceNotFoundException, ValidationException
-from moto.utilities.paginator import paginate
 
 PAGINATION_MODEL: Dict[str, str] = {
     "input_token": "nextToken",
@@ -202,7 +202,7 @@ class ConnectCampaignServiceBackend(BaseBackend):
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
         self.campaigns[id].status = "INACTIVE"
         return
-    
+
     @paginate(pagination_model=PAGINATION_MODEL)
     def list_campaigns(self, filters: dict) -> Dict[str, Any]:
         filtered_campaigns = list(self.campaigns.values())
@@ -214,15 +214,20 @@ class ConnectCampaignServiceBackend(BaseBackend):
             operator_logic = {
                 "Eq": lambda campaign: campaign.connect_instance_id == filter_value,
                 "Ne": lambda campaign: campaign.connect_instance_id != filter_value,
-                "Contains": lambda campaign: filter_value in campaign.connect_instance_id,
-                "StartsWith": lambda campaign: campaign.connect_instance_id.startswith(filter_value),
+                "Contains": lambda campaign: filter_value
+                in campaign.connect_instance_id,
+                "StartsWith": lambda campaign: campaign.connect_instance_id.startswith(
+                    filter_value
+                ),
             }
 
             if filter_operator not in operator_logic:
                 raise ValidationException(f"Unsupported operator: {filter_operator}")
 
-            filtered_campaigns = list(filter(operator_logic[filter_operator], filtered_campaigns))
-        
+            filtered_campaigns = list(
+                filter(operator_logic[filter_operator], filtered_campaigns)
+            )
+
         campaign_summary_list = [
             {
                 "id": campaign.id,

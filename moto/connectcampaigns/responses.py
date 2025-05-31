@@ -1,7 +1,6 @@
 """Handles incoming connectcampaigns requests, invokes methods, returns responses."""
 
 import json
-from operator import ne
 
 from moto.core.responses import BaseResponse
 
@@ -86,7 +85,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         response = {"connectInstanceOnboardingJobStatus": job_status}
 
         return json.dumps(response)
-    
+
     def start_campaign(self) -> str:
         id = self.path.split("/")[-1]
 
@@ -95,7 +94,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         )
 
         return "{}"
-    
+
     def stop_campaign(self) -> str:
         id = self.path.split("/")[-1]
 
@@ -104,13 +103,13 @@ class ConnectCampaignServiceResponse(BaseResponse):
         )
 
         return "{}"
-    
+
     def list_campaigns(self) -> str:
         max_results = int(self._get_param("maxResults", 100))
         next_token = self._get_param("nextToken", None)
         filters = self._get_multi_param_dict("filters", {})
 
-        campaigns  = self.connectcampaigns_backend.list_campaigns(
+        campaigns = self.connectcampaigns_backend.list_campaigns(
             filters=filters,
             max_results=max_results,
             next_token=next_token,
