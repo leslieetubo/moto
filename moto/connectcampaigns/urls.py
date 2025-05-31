@@ -8,7 +8,10 @@ url_bases = [
 
 url_paths = {
     "{0}/campaigns$": ConnectCampaignServiceResponse.dispatch,
+    "{0}/campaigns-summary$": ConnectCampaignServiceResponse.dispatch,
     "{0}/campaigns/(?P<id>[^/]+)$": ConnectCampaignServiceResponse.dispatch,
+    "{0}/campaigns/(?P<id>[^/]+)/start$": ConnectCampaignServiceResponse.dispatch,
+    "{0}/campaigns/(?P<id>[^/]+)/stop$": ConnectCampaignServiceResponse.dispatch,
     "{0}/connect-instance/(?P<connectInstanceId>[^/]+)/config$": ConnectCampaignServiceResponse.dispatch,
     "{0}/connect-instance/(?P<connectInstanceId>[^/]+)/onboarding$": ConnectCampaignServiceResponse.dispatch,
 }

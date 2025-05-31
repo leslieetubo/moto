@@ -8,6 +8,14 @@ from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 
 from .exceptions import ResourceNotFoundException, ValidationException
+from moto.utilities.paginator import paginate
+
+PAGINATION_MODEL: Dict[str, str] = {
+    "input_token": "nextToken",
+    "output_token": "nextToken",
+    "limit_key": "maxResults",
+    "result_key": "campaignSummaryList",
+}
 
 
 class ConnectCampaign(BaseModel):
@@ -182,6 +190,49 @@ class ConnectCampaignServiceBackend(BaseBackend):
         self.instance_configs[connect_instance_id] = instance_config
 
         return job_status.to_dict()
+
+    def start_campaign(self, id: str) -> None:
+        if id not in self.campaigns:
+            raise ResourceNotFoundException(f"Campaign with id {id} not found")
+        self.campaigns[id].status = "ACTIVE"
+        return
+
+    def stop_campaign(self, id: str) -> None:
+        if id not in self.campaigns:
+            raise ResourceNotFoundException(f"Campaign with id {id} not found")
+        self.campaigns[id].status = "INACTIVE"
+        return
+    
+    @paginate(pagination_model=PAGINATION_MODEL)
+    def list_campaigns(self, filters: dict) -> Dict[str, Any]:
+        filtered_campaigns = list(self.campaigns.values())
+
+        if filters and "instanceIdFilter" in filters:
+            filter_value = filters["instanceIdFilter"]["value"]
+            filter_operator = filters["instanceIdFilter"]["operator"]
+
+            operator_logic = {
+                "Eq": lambda campaign: campaign.connect_instance_id == filter_value,
+                "Ne": lambda campaign: campaign.connect_instance_id != filter_value,
+                "Contains": lambda campaign: filter_value in campaign.connect_instance_id,
+                "StartsWith": lambda campaign: campaign.connect_instance_id.startswith(filter_value),
+            }
+
+            if filter_operator not in operator_logic:
+                raise ValidationException(f"Unsupported operator: {filter_operator}")
+
+            filtered_campaigns = list(filter(operator_logic[filter_operator], filtered_campaigns))
+        
+        campaign_summary_list = [
+            {
+                "id": campaign.id,
+                "arn": campaign.arn,
+                "name": campaign.name,
+                "connectInstanceId": campaign.connect_instance_id,
+            }
+            for campaign in filtered_campaigns
+        ]
+        return campaign_summary_list
 
 
 connectcampaigns_backends = BackendDict(
