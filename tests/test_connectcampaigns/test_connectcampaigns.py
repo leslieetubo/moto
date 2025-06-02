@@ -175,3 +175,94 @@ def test_start_instance_onboarding_job():
             connectInstanceId=connect_instance_id,
             encryptionConfig={"enabled": True, "encryptionType": "KMS"},
         )
+
+@mock_aws
+def test_start_campaign():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    create_response = client.create_campaign(
+        name="CampaignToStart",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+            "connectSourcePhoneNumber": "+12065550100",
+            "connectQueueId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    campaign_id = create_response["id"]
+
+    start_response = client.start_campaign(id=campaign_id)
+
+    assert start_response["status"] == "Running"
+
+@mock_aws
+def test_stop_campaign():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    create_response = client.create_campaign(
+        name="CampaignToStop",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+            "connectSourcePhoneNumber": "+12065550100",
+            "connectQueueId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    campaign_id = create_response["id"]
+
+    stop_response = client.stop_campaign(id=campaign_id)
+
+    assert stop_response["status"] == "Stopped"
+
+@mock_aws
+def test_list_campaigns():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    # Create a couple of campaigns
+    client.create_campaign(
+        name="Campaign1",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    client.create_campaign(
+        name="Campaign2",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    response = client.list_campaigns()
+
+    assert len(response["campaigns"]) >= 2
+    assert any(c["name"] == "Campaign1" for c in response["campaigns"])
+    assert any(c["name"] == "Campaign2" for c in response["campaigns"])

@@ -194,13 +194,13 @@ class ConnectCampaignServiceBackend(BaseBackend):
     def start_campaign(self, id: str) -> None:
         if id not in self.campaigns:
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
-        self.campaigns[id].status = "ACTIVE"
+        self.campaigns[id].status = "Running"
         return
 
     def stop_campaign(self, id: str) -> None:
         if id not in self.campaigns:
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
-        self.campaigns[id].status = "INACTIVE"
+        self.campaigns[id].status = "Stopped"
         return
 
     @paginate(pagination_model=PAGINATION_MODEL)
