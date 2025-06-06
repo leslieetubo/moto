@@ -3,7 +3,6 @@
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote
-import logging
 
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict, BaseBackend
@@ -210,14 +209,19 @@ class ConnectCampaignServiceBackend(BaseBackend):
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
         self.campaigns[id].state = "Stopped"
         return
-    
+
     def get_campaign_state(self, id: str) -> str:
         if id not in self.campaigns:
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
         return self.campaigns[id].state
 
     @paginate(pagination_model=PAGINATION_MODEL)
-    def list_campaigns(self, filters: dict, max_results: int, next_token: str) -> Dict[str, Any]:
+    def list_campaigns(
+        self,
+        filters: Optional[Dict[str, Dict[str, str]]],
+        max_results: Optional[int],
+        next_token: Optional[str],
+    ) -> List[Dict[str, str]]:
         filtered_campaigns = list(self.campaigns.values())
 
         if filters and "instanceIdFilter" in filters:
@@ -252,23 +256,32 @@ class ConnectCampaignServiceBackend(BaseBackend):
         ]
         return campaign_summary_list
 
-    def tag_resource(self, arn: str, tags: List[Dict[str, str]]) -> None:
-        tags = self.tagger.convert_dict_to_tags_input(tags)
+    def tag_resource(self, arn: str, tags: Dict[str, str]) -> None:
+        tag_list = [{"Key": k, "Value": v} for k, v in tags.items()]
         arn = unquote(arn)
-        
-        self.tagger.tag_resource(arn, tags)
+        for campaign in self.campaigns.values():
+            if campaign.arn == arn:
+                campaign.tags.update(tags)
+                break
+        self.tagger.tag_resource(arn, tag_list)
         return
 
-    def untag_resource(self, resource_arn: str, tag_keys: List[str]) -> None:
+    def untag_resource(self, arn: str, tag_keys: List[str]) -> None:
+        arn = unquote(arn)
         if not isinstance(tag_keys, list):
             tag_keys = [tag_keys]
-        self.tagger.untag_resource_using_names(resource_arn, tag_keys)
+        for campaign in self.campaigns.values():
+            if campaign.arn == arn:
+                for tag in tag_keys:
+                    campaign.tags.pop(tag, None)
+                break
+        self.tagger.untag_resource_using_names(arn, tag_keys)
         return
 
     def list_tags_for_resource(self, arn: str) -> List[Dict[str, str]]:
         arn = unquote(arn)
         tags = self.tagger.get_tag_dict_for_resource(arn)
-        return tags
+        return [{"Key": k, "Value": v} for k, v in tags.items()]
 
 
 connectcampaigns_backends = BackendDict(

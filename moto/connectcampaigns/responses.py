@@ -1,6 +1,7 @@
 """Handles incoming connectcampaigns requests, invokes methods, returns responses."""
 
 import json
+from typing import Dict, List, Optional, Tuple
 
 from moto.core.responses import BaseResponse
 
@@ -115,23 +116,22 @@ class ConnectCampaignServiceResponse(BaseResponse):
 
         return json.dumps(response)
 
-
     def list_campaigns(self) -> str:
-        max_results =self._get_param("maxResults")
+        max_results = self._get_param("maxResults")
         next_token = self._get_param("nextToken")
         filters = self._get_param("filters", {})
 
-        campaigns = self.connectcampaigns_backend.list_campaigns(
-            filters=filters,
-            max_results=max_results,
-            next_token=next_token,
+        campaigns_result: Tuple[List[Dict[str, str]], Optional[str]] = (
+            self.connectcampaigns_backend.list_campaigns(
+                filters=filters,
+                max_results=max_results,
+                next_token=next_token,
+            )
         )
 
-        
-
         response = {
-            "campaignSummaryList": campaigns[0],
-            "nextToken": next_token,
+            "campaignSummaryList": campaigns_result[0],
+            "nextToken": campaigns_result[1],
         }
         return json.dumps(response)
 
@@ -145,10 +145,10 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return json.dumps(dict())
 
     def untag_resource(self) -> str:
-        resource_arn = self._get_param("ResourceArn")
-        tag_keys = self._get_param("TagKeys")
+        arn = self._get_param("arn")
+        tag_keys = self._get_param("tagKeys")
         self.connectcampaigns_backend.untag_resource(
-            resource_arn=resource_arn,
+            arn=arn,
             tag_keys=tag_keys,
         )
         return json.dumps(dict())
