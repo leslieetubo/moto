@@ -1,5 +1,6 @@
 """Unit tests for connectcampaigns-supported APIs."""
 
+from pydoc import describe
 import boto3
 import pytest
 
@@ -176,6 +177,7 @@ def test_start_instance_onboarding_job():
             encryptionConfig={"enabled": True, "encryptionType": "KMS"},
         )
 
+
 @mock_aws
 def test_start_campaign():
     client = boto3.client("connectcampaigns", region_name="us-east-1")
@@ -198,9 +200,11 @@ def test_start_campaign():
 
     campaign_id = create_response["id"]
 
-    start_response = client.start_campaign(id=campaign_id)
+    client.start_campaign(id=campaign_id)
+    describe_response = client.get_campaign_state(id=campaign_id)
 
-    assert start_response["status"] == "Running"
+    assert describe_response["state"] == "Running"
+
 
 @mock_aws
 def test_stop_campaign():
@@ -225,8 +229,10 @@ def test_stop_campaign():
     campaign_id = create_response["id"]
 
     stop_response = client.stop_campaign(id=campaign_id)
+    describe_response = client.get_campaign_state(id=campaign_id)
 
-    assert stop_response["status"] == "Stopped"
+    assert describe_response["state"] == "Stopped"
+
 
 @mock_aws
 def test_list_campaigns():
@@ -263,6 +269,175 @@ def test_list_campaigns():
 
     response = client.list_campaigns()
 
-    assert len(response["campaigns"]) >= 2
-    assert any(c["name"] == "Campaign1" for c in response["campaigns"])
-    assert any(c["name"] == "Campaign2" for c in response["campaigns"])
+    assert len(response["campaignSummaryList"]) >= 2
+    assert any(c["name"] == "Campaign1" for c in response["campaignSummaryList"])
+    assert any(c["name"] == "Campaign2" for c in response["campaignSummaryList"])
+
+@mock_aws
+def test_list_campaigns_with_filters():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    # Create a couple of campaigns
+    client.create_campaign(
+        name="Campaign1",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    client.create_campaign(
+        name="Campaign2",
+        connectInstanceId="12345678-1234-1234-1234-000000000000",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    # Filter by name
+    response = client.list_campaigns(filters={
+        'instanceIdFilter': {
+            'value': '12345678-1234-1234-1234-123456789012',
+            'operator': 'Eq'
+        }
+    })
+
+    assert len(response["campaignSummaryList"]) == 1
+    assert response["campaignSummaryList"][0]["name"] == "Campaign1"
+
+    # Filter by connectInstanceId
+    response = client.list_campaigns(
+        filters ={
+            'instanceIdFilter': {
+                'value': '12345678-1234-1234-1234-12340000012',
+                'operator': 'Eq'
+            }
+        }
+    )
+    assert len(response["campaignSummaryList"]) == 0
+
+@mock_aws
+def test_start_campaign_invalid_id():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    with pytest.raises(client.exceptions.ResourceNotFoundException):
+        client.start_campaign(id="non-existent-id")
+
+@mock_aws
+def test_stop_campaign_invalid_id():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    with pytest.raises(client.exceptions.ResourceNotFoundException):
+        client.stop_campaign(id="non-existent-id")
+
+@mock_aws
+def test_tag_resource():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    create_response = client.create_campaign(
+        name="CampaignToTag",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    client.tag_resource(
+        arn=create_response["arn"],
+        tags={"Environment": "Test", "Owner": "DevTeam"},
+    )
+
+    # assert tag_response is None
+    # Verify tags
+    describe_tags = client.list_tags_for_resource(arn=create_response["arn"])
+    assert "tags" in describe_tags
+
+    tags = describe_tags["tags"]
+    assert tags["Environment"] == "Test"
+    assert tags["Owner"] == "DevTeam"
+
+@mock_aws
+def test_untag_resource():
+    client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+    create_response = client.create_campaign(
+        name="CampaignToUntag",
+        connectInstanceId="12345678-1234-1234-1234-123456789012",
+        dialerConfig={
+            "progressiveDialerConfig": {
+                "bandwidthAllocation": 1.0,
+                "dialingCapacity": 2.0,
+            }
+        },
+        outboundCallConfig={
+            "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+        },
+    )
+
+    campaign_id = create_response["id"]
+    client.tag_resource(
+        arn=create_response["arn"],
+        tags={"Environment": "Test", "Owner": "DevTeam"},
+    )
+
+    untag_response = client.untag_resource(
+        resourceArn=create_response["arn"],
+        tagKeys=["Environment"],
+    )
+
+    assert untag_response is None
+
+    # Verify tags after untagging
+    describe_response = client.describe_campaign(id=campaign_id)
+    assert "tags" in describe_response["campaign"]
+    tags = describe_response["campaign"]["tags"]
+    assert "Environment" not in tags
+    assert tags["Owner"] == "DevTeam"
+
+# @mock_aws
+# def test_list_tags_for_resource():
+#     client = boto3.client("connectcampaigns", region_name="us-east-1")
+
+#     create_response = client.create_campaign(
+#         name="CampaignToListTags",
+#         connectInstanceId="12345678-1234-1234-1234-123456789012",
+#         dialerConfig={
+#             "progressiveDialerConfig": {
+#                 "bandwidthAllocation": 1.0,
+#                 "dialingCapacity": 2.0,
+#             }
+#         },
+#         outboundCallConfig={
+#             "connectContactFlowId": "12345678-1234-1234-1234-123456789012",
+#         },
+#     )
+
+#     campaign_id = create_response["id"]
+#     client.tag_resource(
+#         arn=create_response["arn"],
+#         tags={"Environment": "Test", "Owner": "DevTeam"},
+#     )
+
+#     tags_response = client.list_tags_for_resource(arn=create_response["arn"])
+
+#     assert len(tags_response) == 2
+#     assert tags_response["Environment"] == "Test"
+#     assert tags_response["Owner"] == "DevTeam"

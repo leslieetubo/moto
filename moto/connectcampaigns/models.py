@@ -1,20 +1,26 @@
 """ConnectCampaignServiceBackend class with methods for supported APIs."""
 
 import uuid
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import unquote
+import logging
 
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.utilities.paginator import paginate
+from moto.utilities.tagging_service import TaggingService
 
 from .exceptions import ResourceNotFoundException, ValidationException
 
-PAGINATION_MODEL: Dict[str, str] = {
-    "input_token": "nextToken",
-    "output_token": "nextToken",
-    "limit_key": "maxResults",
-    "result_key": "campaignSummaryList",
+PAGINATION_MODEL = {
+    "list_campaigns": {
+        "input_token": "next_token",
+        "limit_key": "max_results",
+        "limit_default": 100,
+        "output_token": "nextToken",
+        "unique_attribute": "id",
+    }
 }
 
 
@@ -31,6 +37,7 @@ class ConnectCampaign(BaseModel):
         self.id = str(uuid.uuid4())
         self.name = name
         self.connect_instance_id = connect_instance_id
+        self.state = "Initialized"
         self.dialer_config = dialer_config
         self.outbound_call_config = outbound_call_config
         self.region = region
@@ -101,6 +108,7 @@ class ConnectCampaignServiceBackend(BaseBackend):
         self.campaigns: Dict[str, ConnectCampaign] = {}
         self.instance_configs: Dict[str, ConnectInstanceConfig] = {}
         self.onboarding_jobs: Dict[str, ConnectInstanceOnboardingJobStatus] = {}
+        self.tagger = TaggingService()
 
     def create_campaign(
         self,
@@ -194,17 +202,22 @@ class ConnectCampaignServiceBackend(BaseBackend):
     def start_campaign(self, id: str) -> None:
         if id not in self.campaigns:
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
-        self.campaigns[id].status = "Running"
+        self.campaigns[id].state = "Running"
         return
 
     def stop_campaign(self, id: str) -> None:
         if id not in self.campaigns:
             raise ResourceNotFoundException(f"Campaign with id {id} not found")
-        self.campaigns[id].status = "Stopped"
+        self.campaigns[id].state = "Stopped"
         return
+    
+    def get_campaign_state(self, id: str) -> str:
+        if id not in self.campaigns:
+            raise ResourceNotFoundException(f"Campaign with id {id} not found")
+        return self.campaigns[id].state
 
     @paginate(pagination_model=PAGINATION_MODEL)
-    def list_campaigns(self, filters: dict) -> Dict[str, Any]:
+    def list_campaigns(self, filters: dict, max_results: int, next_token: str) -> Dict[str, Any]:
         filtered_campaigns = list(self.campaigns.values())
 
         if filters and "instanceIdFilter" in filters:
@@ -238,6 +251,24 @@ class ConnectCampaignServiceBackend(BaseBackend):
             for campaign in filtered_campaigns
         ]
         return campaign_summary_list
+
+    def tag_resource(self, arn: str, tags: List[Dict[str, str]]) -> None:
+        tags = self.tagger.convert_dict_to_tags_input(tags)
+        arn = unquote(arn)
+        
+        self.tagger.tag_resource(arn, tags)
+        return
+
+    def untag_resource(self, resource_arn: str, tag_keys: List[str]) -> None:
+        if not isinstance(tag_keys, list):
+            tag_keys = [tag_keys]
+        self.tagger.untag_resource_using_names(resource_arn, tag_keys)
+        return
+
+    def list_tags_for_resource(self, arn: str) -> List[Dict[str, str]]:
+        arn = unquote(arn)
+        tags = self.tagger.get_tag_dict_for_resource(arn)
+        return tags
 
 
 connectcampaigns_backends = BackendDict(
