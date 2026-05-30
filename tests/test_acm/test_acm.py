@@ -546,6 +546,26 @@ def test_request_exportable_certificate():
 
 
 @mock_aws
+def test_request_certificate_options_without_export_defaults_to_disabled():
+    client = boto3.client("acm", region_name="eu-central-1")
+
+    resp = client.request_certificate(
+        DomainName="example.com",
+        Options={"CertificateTransparencyLoggingPreference": "DISABLED"},
+    )
+    arn = resp["CertificateArn"]
+
+    cert = client.describe_certificate(CertificateArn=arn)["Certificate"]
+    assert cert["Options"]["Export"] == "DISABLED"
+    assert cert["Options"]["CertificateTransparencyLoggingPreference"] == "DISABLED"
+
+    summary = client.list_certificates()["CertificateSummaryList"]
+    matching = [c for c in summary if c["CertificateArn"] == arn]
+    assert len(matching) == 1
+    assert matching[0]["Exported"] is False
+
+
+@mock_aws
 def test_list_certificates_with_key_types_filter():
     client = boto3.client("acm", region_name="us-east-1")
     arn = _import_cert(client)
